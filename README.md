@@ -7,9 +7,14 @@ Those gmt scripts (in generic-gmts.zip) themselves will run gmtmake_new.e (runs 
 There are many unused programs for various special purposes that are not necessary to run UMISM
 
 Running UMISM with a data file inputE.data:
-  unpack.e E E
-  map5.e E E
-    various interactive commands to control UMISM
- packz.e E E WW
-    to extract results displaye with generic.gmt
+
+unpack.e E E
+
+map5.e E E
+
+...  various interactive commands to control UMISM
+
+packz.e E E WW
+
+...  label numbers, output interval, start and end times to extract results displayed with generic.gmt
 
