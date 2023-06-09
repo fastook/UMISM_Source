@@ -1,0 +1,74 @@
+      SUBROUTINE XAXIS(LABEL,XLEN,XMIN,XMAX,YMIN,YMAX)
+      CHARACTER*20 LABEL
+      CALL TXFONT(0)
+      XTIC=(XMAX-XMIN)/100.
+      YTIC=(YMAX-YMIN)/100.
+      CALL MOVE(XMIN,YMIN)
+      DO 10 X=0.,XLEN,1.
+        XP=XMIN+X*(XMAX-XMIN)/XLEN
+        CALL DRAW(XP,YMIN)
+        CALL DRAW(XP,YMIN-3.*YTIC)
+        CALL DRAW(XP,YMIN+3.*YTIC)
+        CALL MOVE(XP-7.*XTIC,YMIN-7.*YTIC)
+        CALL  GNUMBR(XP,2,8)
+        CALL MOVE(XP,YMIN)
+10    CONTINUE
+      CALL MOVE(XMIN,YMIN)
+      DO 11 X=0.,XLEN,.1
+        XP=XMIN+X*(XMAX-XMIN)/XLEN
+        CALL MOVE(XP,YMIN)
+        CALL DRAW(XP,YMIN-YTIC)
+11    CONTINUE
+      CALL MOVE(XMIN+30.*XTIC,YMIN-15.*YTIC)
+      CALL TEXT(20,LABEL)
+      END
+      SUBROUTINE YAXIS(LABEL,YLEN,XMIN,XMAX,YMIN,YMAX)
+      CHARACTER*20 LABEL
+      CALL TXFONT(0)
+      CALL TXANGL(90.)
+      XTIC=(XMAX-XMIN)/100.
+      YTIC=(YMAX-YMIN)/100.
+      CALL MOVE(XMIN,YMIN)
+      DO 10 Y=0.,YLEN,1.
+        YP=YMIN+Y*(YMAX-YMIN)/YLEN
+        CALL DRAW(XMIN,YP)
+        CALL DRAW(XMIN-3.*XTIC,YP)
+        CALL DRAW(XMIN+3.*XTIC,YP)
+        CALL MOVE(XMIN-7.*XTIC,YP-8.*YTIC)
+        CALL  GNUMBR(YP,2,8)
+        CALL MOVE(XMIN,YP)
+10    CONTINUE
+      CALL MOVE(XMIN,YMIN)
+      DO 11 Y=0.,YLEN,.1
+        YP=YMIN+Y*(YMAX-YMIN)/YLEN
+        CALL MOVE(XMIN,YP)
+        CALL DRAW(XMIN-XTIC,YP)
+11    CONTINUE
+      CALL MOVE(XMIN-15.*XTIC,YMIN+23.*YTIC)
+C     CALL TXANGL(90.)
+      CALL TEXT(20,LABEL)
+      CALL TXANGL(0.)
+      END
+      SUBROUTINE GNUMBR(X,IDIGIT,IWIDE)
+      CHARACTER*20 JUNK
+      IF(ABS(X).GE..1 .AND. ABS(X).LE.999999.) THEN
+        WRITE(JUNK,100) X
+100     FORMAT(G13.6)
+      ELSEIF(X.EQ.0.) THEN
+        WRITE(JUNK,101) X
+101     FORMAT(2X,F7.5)
+      ELSE
+        WRITE(JUNK,102) X
+102     FORMAT(1PE9.2)
+      ENDIF
+C     WRITE(JUNK,103) X
+103   FORMAT(F6.0)
+      CALL TEXT(20,JUNK)
+      END
+      subroutine zoom(a,b,c,d)
+      print *,'not working'
+      end
+      subroutine txangl(a)
+      end
+      subroutine txfont(i)
+      end

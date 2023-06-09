@@ -1,0 +1,47 @@
+      include "parameter.h"
+      PARAMETER(NMAX=MAXNUM)
+      IMPLICIT REAL*8(A-H,O-Z)
+      CHARACTER HED*80
+      DIMENSION KODE(NMAX),X(NMAX),Y(NMAX),HTICE(NMAX),ADOT(NMAX),
+     &          FRACT(NMAX),PSURF(NMAX),BDROCK(NMAX),FLOWA(NMAX),
+     &          SLDGB(NMAX),KX(NMAX,4),CONST(NMAX),IBFLUX(NMAX,2),
+     &          BFLUX(NMAX),temp(nmax),itype(nmax),AFUDGE(NMAX)
+      READ(1,1000) HED,NUMNP,NUMEL,NUMCOL,NUMLEV,NUMGBC,NDT,INTER,DT
+      WRITE(11,2000) HED,NUMNP,NUMEL,NUMCOL,NUMLEV,NUMGBC,NDT,INTER,DT
+      PRINT *,HED
+1000  FORMAT (A80,/,7I5,F8.1)
+2000  FORMAT (A80,/,7I6,F8.1)
+      IF(NUMNP.GT.NMAX) THEN
+        PRINT *,'NUMNP=',NUMNP,' NMAX=',NMAX,' INCREASE NMAX'
+        STOP
+      ENDIF
+      DO 100 N=1,NUMNP
+        READ(1,1001) NUM,KODE(N),X(N),Y(N),HTICE(N),
+     &                   ADOT(N),FRACT(N),PSURF(N),
+     &                   BDROCK(N),FLOWA(N),SLDGB(N),
+     &                   temp(n),itype(n),AFUDGE(N)
+1001  FORMAT(I4,I4,2E12.5,F10.2,F7.2,F9.2,F10.3,F10.1,F10.5,2F10.5,
+     &       i5,F10.3)
+       WRITE(11,2001) NUM,KODE(N),X(N),Y(N),HTICE(N),
+     &                   ADOT(N),FRACT(N),PSURF(N),
+     &                   BDROCK(N),FLOWA(N),SLDGB(N),
+     &                   temp(n),itype(n),AFUDGE(N)
+2001  FORMAT(I6,I4,2E12.5,F10.2,F7.2,F9.2,F10.3,F10.1,F10.5,2F10.5,
+     &       i5,F10.3)
+100   CONTINUE
+      DO 90 N=1,NUMEL
+      READ(1,1002) NUM,KX(NUM,1),KX(NUM,2),KX(NUM,3),KX(NUM,4),CONST(N)
+      WRITE(11,2002) NUM,KX(NUM,1),KX(NUM,2),KX(NUM,3),KX(NUM,4),
+     &               CONST(N)
+1002  FORMAT(5I5,E17.10)
+2002  FORMAT(5I6,1PE17.10)
+ 90   CONTINUE
+      IF(NUMGBC.GT.0) THEN
+        DO 210 N=1,NUMGBC
+          READ(1,1007) IBFLUX(N,1),IBFLUX(N,2),BFLUX(N)
+          WRITE(11,2007) IBFLUX(N,1),IBFLUX(N,2),BFLUX(N)
+1007  FORMAT(2I5,E13.6)
+2007  FORMAT(2I6,E13.6)
+210     CONTINUE
+      ENDIF
+      END

@@ -1,0 +1,30 @@
+#pack1.e e1 e1 << END
+#$1
+#END
+gmtmake.e << END
+1
+15
+END
+psbasemap -V -U -R-2000.0/2000/-2000.0/2000 -JX5/5 -B500g500/500g500 -P -X1 -Y2 -K  > test.ps
+nearneighbor gmt.XYZ -V -Gout.grd -I40.00/40.00 -R -S80.00
+makecpt -Z -T0/100/10 -V -Crainbow > topo.cpt
+#grd2cpt out.grd -Z -V -Crainbow > topo.cpt
+grdgradient out.grd -A45 -Goutt.grd -Nt -V
+grdimage out.grd -V -R -JX -O -K -P -U -V -Ctopo.cpt  >> test.ps
+psxy -R -JX -O -K -M velo.xy -W0.1 -V >> test.ps
+grdcontour -O -V  -S5 out.grd -JX -R -Ctopo.cpt -B -P -A- -Wa -T -K  >> test.ps
+#psxy -V -O -R -JX -B -K -M outline.GMT -W10 -P >> test.ps
+#psxy -V -O -R -JX -B -K -M lake2.GMT -W5/0/255/0 -SC0.025 -P >> test.ps
+#psxy -V -O -R -JX -B -K -M lake1.GMT -W5/0/255/0 -SC0.025 -P >> test.ps
+#psxy -V -O -R -JX -B -K -M points.GMT -W5/0/0/0 -SA0.025 -P >> test.ps
+psscale -E -V -Ctopo.cpt -D6/4/3.3/0.3 -O -K -L >> test.ps
+pstext -P -R0/11/0/8.5 -Jx1 -O -K << END >> test.ps
+0  6.5 20 0 1 1  VELOCITY                 
+END
+pstext -P -R0/11/0/8.5 -Jx1 -O  << END >> test.ps
+0.2  6.2 10 0 1 1  TIME= $1
+END
+cp test.ps velo$1.ps
+#ghostview velo$1.ps &
+pstoimg -crop a velo$1.ps
+

@@ -1,0 +1,398 @@
+C READS FROM STANDARD OUT3 AND PLOTS CONTOURS DIRECTLY
+C
+      include "parameter.h"
+      PARAMETER(NMAX=MAXNUM,NCOLOR=15,NPLOT=1000)
+      IMPLICIT REAL*8 (A-H,O-Z)
+      LOGICAL FOUND
+      CHARACTER HED*80,ANSW,JUNK*80
+      DIMENSION XOUT(NPLOT),YOUT(NPLOT),IOUT(NPLOT)
+      DIMENSION X(44,40),Y(44,40),Z(44,40)
+      DIMENSION XX(NMAX),YY(NMAX),ZZ(NMAX),NNODE(NMAX),NBOUND(400)
+      DIMENSION PSURF(NMAX),FRACT(NMAX),FLOWA(NMAX),HTICE(NMAX)
+      DIMENSION ADOT(NMAX)
+      DIMENSION DEPB(NMAX),SLDGB(NMAX),AFUDGE(NMAX)
+      DIMENSION XLINE(400),YLINE(400)
+      DIMENSION KX(NMAX,4),IK(5)
+      DIMENSION ICMAP(NCOLOR)
+      DIMENSION INARAY(3)
+      DATA ICMAP /1,2,3,4,5,6,7,8,9,10,11,12,13,14,15/
+      IDISP=1
+      II=1
+      DO 20 I=1,NPLOT
+        READ(12,*,END=21) XIN,YIN,IIN
+        IF(XIN.EQ.-99999.) THEN
+          READ(12,22) JUNK
+22    FORMAT(A80)
+        ELSE
+          XOUT(II)=XIN
+          YOUT(II)=YIN
+          IOUT(II)=IIN
+          NOUT=II
+          II=II+1
+        ENDIF
+20    CONTINUE
+21    CONTINUE
+C *** FOLLOWING IS LEVEL SPACING
+      ISEG=1
+3     CONTINUE
+      WRITE(*,*) 'INPUT -N FOR DISPLAY STEP'
+      WRITE(*,*) 'INPUT  0 FOR HTICE,'
+      WRITE(*,*) '       1 FOR BDROCK,'
+      WRITE(*,*) '       2 FOR ADOT,'
+      WRITE(*,*) '       3 FOR FRACT'
+      WRITE(*,*) '       4 FOR FLOW CONSTANT,'
+      WRITE(*,*) '       5 FOR DIFFERENCE,'
+      WRITE(*,*) '       6 FOR THICKNESS,'
+      WRITE(*,*) '       7 FOR MARGIN,'
+      WRITE(*,*) '       8 FOR PSURF,'
+      WRITE(*,*) '       9 FOR ZONE,'
+      WRITE(*,*) '      10 FOR SLIDING CONSTANT,'
+      WRITE(*,*) '      11-FOR AFUDGE'
+      WRITE(*,*) '      12-QUIT'
+      READ(*,*,END=9999) IPLOT
+      IF(IPLOT.EQ.12) GOTO 9999
+  350 FORMAT (I6)
+      IF(IPLOT.LT.0) THEN
+        IDISP=ABS(IPLOT)
+        GOTO 3
+      ENDIF
+      PRINT *,' THIS IS IPLOT',IPLOT
+      IF(IPLOT.EQ.0) THEN
+        RMAX=5500.
+        RMIN=.0001
+c     RMIN=-3000.0001
+c     RMIN=-2999.999
+C     RMIN=.001
+C     RMAX=1.
+      ENDIF
+      IF(IPLOT.EQ.8) THEN
+        RMAX=5000.
+        RMIN=.0001
+      ENDIF
+      IF(IPLOT.EQ.9) THEN
+        RMAX=-110.
+        RMIN=-120.
+      ENDIF
+      IF(IPLOT.EQ.10) THEN
+        RMAX=.05
+        RMIN=0.
+      ENDIF
+      IF(IPLOT.EQ.1) THEN
+        RMAX=6000.
+        RMIN=-3000.0001
+      ENDIF
+      IF(IPLOT.EQ.2) THEN
+        RMAX=4.
+        RMIN=-4.
+        RMIN=0.
+C       RMIN=-.5
+C       RMAX=.5
+        rmax=.2
+C     RMIN=0.
+C     RMAX=0.
+      ENDIF
+      IF(IPLOT.EQ.3) THEN
+        RMAX=1.
+        RMIN=.01
+c       RMAX=.01
+      ENDIF
+      IF(IPLOT.EQ.4) THEN
+        RMAX=7.
+        RMIN=.0
+      ENDIF
+      IF(IPLOT.EQ.5) THEN
+        RMAX=3000.
+        RMIN=-600.
+      ENDIF
+      IF(IPLOT.EQ.6) THEN
+        RMAX=6000.
+        RMIN=0.001
+      ENDIF
+      IF(IPLOT.EQ.7) THEN
+        RMAX=1.5
+        RMIN=1.0000
+      ENDIF
+      IF(IPLOT.EQ.11) THEN
+        RMAX=3.
+        RMIN=0.0000
+      ENDIF
+      NLINE=0
+      READ(11,*,END=99) NLINE
+      IF(NLINE.GT.0) READ(11,1001) (NBOUND(I),I=1,NLINE)
+99    CONTINUE
+      ISTART=1
+1001  FORMAT(16I6)
+      RLEVSP=25.
+      IF(IPLOT.EQ.0) RLEVSP=500.
+      IF(IPLOT.EQ.8) RLEVSP=500.
+      IF(IPLOT.EQ.1) RLEVSP=500.
+      IF(IPLOT.EQ.2) RLEVSP=.05
+      IF(IPLOT.EQ.3) RLEVSP=.45
+      IF(IPLOT.EQ.4) RLEVSP=.50
+      IF(IPLOT.EQ.5) RLEVSP=100.
+      IF(IPLOT.EQ.6) RLEVSP=500.
+      IF(IPLOT.EQ.7) RLEVSP=1.
+      IF(IPLOT.EQ.9) RLEVSP=1.
+      IF(IPLOT.EQ.10) RLEVSP=.010
+      IF(IPLOT.EQ.11) RLEVSP=.50
+C READ INPUT HEADER
+      READ(30,1000,END=999) HED,NUMNP,NUMEL,NUMCOL,NUMLEV,NUMGBC,NDT,
+     &              INTER,DT
+1000  FORMAT (A80,/,7I6,F8.0)
+C READ INPUT GRID, THINGS THAT NEVER CHANGE
+      READ(31) HED
+      READ(31) (KODE,I=1,NUMNP)
+      READ(31) (XX(I),I=1,NUMNP)
+      READ(31) (YY(I),I=1,NUMNP)
+      READ(31) (PSURF(I),I=1,NUMNP)
+      READ(31) (AJUNK,I=1,NUMNP)
+      READ(31) (KX(I,1),KX(I,2),KX(I,3),KX(I,4),I=1,NUMEL)
+      READ(31) (IB1,IB2,BJUNK,I=1,NUMGBC)
+C READ INPUT DIFFER, THINGS THAT DIFFER FROM ONE GRID TO THE NEXT
+      READ(32) HED
+      READ(32) (AJUNK,I=1,NUMNP)
+      READ(32) (FRACT(I),I=1,NUMNP)
+      READ(32) (FLOWA(I),I=1,NUMNP)
+      READ(32) (SLDGB(I),I=1,NUMNP)
+      DO 9 NUM=1,NUMNP
+      XX(NUM)=XX(NUM)*.001
+      YY(NUM)=YY(NUM)*.001
+C IROT=0 FOR ORDINARY, IROT=1 FOR ROTATED 90 DEG
+      IROT=0
+      IF(IROT.EQ.1) THEN
+        TEMP=XX(NUM)
+        XX(NUM)=-YY(NUM)
+        YY(NUM)=TEMP
+      ENDIF
+9     CONTINUE
+      IREAD=0
+1     CONTINUE
+      IREAD=IREAD+1
+C READ INPUT TIME, THINGS THAT CHANGE WITH TIME
+      READ(33,END=999) HED
+      READ(33) (HTICE(I),I=1,NUMNP)
+      READ(33) (ADOT(I),I=1,NUMNP)
+      READ(33) (DEPB(I),I=1,NUMNP)
+      READ(33) (CONST,I=1,NUMEL)
+      READ(33) (ACON,I=1,NUMEL)
+      READ(34) (FRACT(I),I=1,NUMNP)
+      READ(34) (FLOWA(I),I=1,NUMNP)
+      READ(34) (SLDGB(I),I=1,NUMNP)
+      READ(34) (AFUDGE(I),I=1,NUMNP)
+      PRINT *,IREAD,IDISP,MOD(IREAD,IDISP)+1
+      IF(MOD(IREAD,IDISP)+1.NE.1) GOTO 1
+      DO 10 NUM=1,NUMNP
+C CHANGE PLOTTED VARIABBLE HERE
+      IF(IPLOT.EQ.0) ZZ(NUM)=HTICE(NUM)
+      IF(IPLOT.EQ.1) ZZ(NUM)=DEPB(NUM)
+      IF(IPLOT.EQ.2) ZZ(NUM)=ADOT(NUM)
+      IF(IPLOT.EQ.9) ZZ(NUM)=ADOT(NUM)
+      IF(IPLOT.EQ.10) ZZ(NUM)=SLDGB(NUM)
+      IF(IPLOT.EQ.11) ZZ(NUM)=AFUDGE(NUM)
+      IF(IPLOT.EQ.3) ZZ(NUM)=FRACT(NUM)
+      IF(IPLOT.EQ.4) ZZ(NUM)=FLOWA(NUM)
+      IF(IPLOT.EQ.5) ZZ(NUM)=HTICE(NUM)-PSURF(NUM)
+      IF(IPLOT.EQ.6 .OR. IPLOT.EQ.7) THEN
+        ZZ(NUM)=HTICE(NUM)-DEPB(NUM)
+        IF(DEPB(NUM).LT.0.) THEN
+c          FLOT=-DEPB(NUM)*1.03/.917
+          FLOT=DEPB(NUM)*(1.-1.03/.917)
+          IF(HTICE(NUM).LT.FLOT) ZZ(NUM)=0.
+        ENDIF
+        IF(ZZ(NUM).LT.10.) ZZ(NUM)=0.
+      ENDIF
+      IF(IPLOT.EQ.8) ZZ(NUM)=PSURF(NUM)
+10    CONTINUE
+200   FORMAT(I6,I4,2E12.5,F10.2,F7.2,F9.2,F10.3,F10.1,F10.2,F10.3)
+      DO 12 I=1,NUMEL
+        NNODE(I)=4
+        IF(KX(I,4).EQ.0) NNODE(I)=3
+12    CONTINUE
+C     RMAX=-1.D+70
+      IF(ISTART.EQ.1) THEN
+C       ISEG=1
+        XMAX=-1.E30
+        YMAX=XMAX
+        XMIN=-XMAX
+        YMIN=XMIN
+        IF(NLINE.GT.0) THEN
+          DO 14 I=1,NLINE
+            XMAX=MAX(XX(NBOUND(I)),XMAX)
+            XMIN=MIN(XX(NBOUND(I)),XMIN)
+            YMAX=MAX(YY(NBOUND(I)),YMAX)
+            YMIN=MIN(YY(NBOUND(I)),YMIN)
+14        CONTINUE
+        ELSE
+          DO 15 I=1,NUMNP
+            XMAX=MAX(XX(I),XMAX)
+            XMIN=MIN(XX(I),XMIN)
+            YMAX=MAX(YY(I),YMAX)
+            YMIN=MIN(YY(I),YMIN)
+15        CONTINUE
+        ENDIF
+        XDELT=(XMAX-XMIN)*.2
+        YDELT=(YMAX-YMIN)*.2
+        XMAX=XMAX+XDELT
+        YMAX=YMAX+YDELT
+        XMIN=XMIN-XDELT
+        YMIN=YMIN-YDELT
+        IF(ISEG.EQ.1) CALL GRSTRT(800,800)
+        IF((XMAX-XMIN).GT.(YMAX-YMIN)) THEN
+          YMAX=YMIN+(XMAX-XMIN)*1.
+      PRINT *,1.
+        ELSE
+          XMAX=XMIN+(YMAX-YMIN)*1.
+      PRINT *,1.
+        ENDIF
+        CALL WINDOW(REAL(XMIN),REAL(XMAX),REAL(YMIN),REAL(YMAX))
+        WRITE(7,*) XMIN,XMAX,YMIN,YMAX
+        ISTART=2
+      ENDIF
+      IF(ISEG.EQ.1) THEN
+        CALL OPNSEG(ISEG)
+        CALL MOVE(REAL(XMIN),REAL(YMIN))
+        CALL DRAW(REAL(XMIN),REAL(YMAX))
+        CALL DRAW(REAL(XMAX),REAL(YMAX))
+        CALL DRAW(REAL(XMAX),REAL(YMIN))
+        CALL DRAW(REAL(XMIN),REAL(YMIN))
+        CALL LINCLR(1)
+        CALL DASHPT(3)
+        DO 30 I=1,NOUT
+          IF(IOUT(I).EQ.1) THEN
+            CALL MOVE(REAL(XOUT(I)),REAL(YOUT(I)))
+          ELSE
+            CALL DRAW(REAL(XOUT(I)),REAL(YOUT(I)))
+          ENDIF
+30      CONTINUE
+      CALL CLOSEG
+      CALL DASHPT(0)
+      ISEG=ISEG+1
+      ENDIF
+      CALL OPNSEG(ISEG)
+      CALL MOVE(REAL(XMIN+(XMAX-XMIN)*.05),REAL(YMAX-(YMAX-YMIN)*.05))
+      CALL TXTCLR(1)
+      CALL TEXT(80,HED)
+      CALL LINCLR(8)
+      if(nline.gt.0) then
+        CALL MOVE(REAL(XX(NBOUND(1))),REAL(YY(NBOUND(1))))
+        DO 16 I=2,NLINE
+          CALL DRAW(REAL(XX(NBOUND(I))),REAL(YY(NBOUND(I))))
+16      CONTINUE
+      endif
+C     RMIN=1.D+70
+C     DO 40 I=1,NUMNP
+C     RMAX=MAX(ZZ(I),RMAX)
+C     RMIN=MIN(ZZ(I),RMIN)
+40    CONTINUE
+      LEVEL=(RMAX-RMIN)/RLEVSP+1
+      DLEV=RLEVSP
+      IF(LEVEL.LE.0) THEN
+        LEVEL=2-LEVEL
+        DLEV=-DLEV
+      ENDIF
+      ICOLOR=1
+C     IF(IPLOT.EQ.7) ICOLOR=1+MOD(ISEG,NCOLOR)
+      CALL LINCLR(ICMAP(ICOLOR))
+      IPASS=1
+      XPOS=XMAX-(XMAX-XMIN)*.125
+      YPOS=YMAX-(YMAX-YMIN)*.1
+      DO 500 LEV=1,LEVEL
+      FOUND=.FALSE.
+      ICOUNT=0
+      VAL=RMIN+(LEV-1)*DLEV
+      DO 450 N=1,NUMEL
+      IPASS=1
+      DO 415 J=1,NNODE(N)
+      IK(J)=KX(N,J)
+415   CONTINUE
+      IK(NNODE(N)+1)=KX(N,1)
+      ICOUNT=0
+      DO 425 NN=1,NNODE(N)
+      I=IK(NN)
+      J=IK(NN+1)
+      IF(ZZ(I).LT.VAL .AND. VAL.LE.ZZ(J)) GOTO 430
+      IF(ZZ(J).LT.VAL .AND. VAL.LE.ZZ(I)) GOTO 430
+      GOTO 425
+430   CONTINUE
+      FOUND=.TRUE.
+      ICOUNT=ICOUNT+1
+      XINT=XX(J)+(VAL-ZZ(J))*(XX(I)-XX(J))/(ZZ(I)-ZZ(J))
+      YINT=YY(J)+(VAL-ZZ(J))*(YY(I)-YY(J))/(ZZ(I)-ZZ(J))
+      IF(IPASS.EQ.1) THEN
+        CALL MOVE(REAL(XINT),REAL(YINT))
+        IPASS=2
+      ELSE
+        CALL DRAW(REAL(XINT),REAL(YINT))
+      ENDIF
+425   CONTINUE
+      IF(ICOUNT.EQ.0) GOTO 450
+450   CONTINUE
+      IF(FOUND) THEN
+        CALL MOVE(REAL(XPOS),REAL(YPOS))
+        CALL TXTCLR(ICMAP(ICOLOR))
+        CALL RNUMBR(REAL(VAL),3,9)
+        YPOS=YPOS-(YMAX-YMIN)*.025
+      ENDIF
+      ICOLOR=ICOLOR+1
+      IF(ICOLOR.GT.NCOLOR) ICOLOR=1
+      CALL LINCLR(ICMAP(ICOLOR))
+500   CONTINUE
+98    FORMAT(3G13.4)
+97    FORMAT('=',F10.3)
+      IF(IPLOT.NE.7) ICOLOR=1
+      CALL CLOSEG
+      IF(ISEG.NE.2) CALL SETVIS(ISEG-1,.FALSE.)
+C     CALL NEWPAG
+      ISEG=ISEG+1
+C     CALL GETUTX(19,'INPUT C TO CONTINUE',1,ANSW,IGOT)
+      GOTO 1
+999   CONTINUE
+      NSEG=ISEG-1
+900   CONTINUE
+      CALL SETVIS(NSEG,.FALSE.)
+c      CALL GETUIN(-1,'PAUSE 1, NO PAUSE 0',1,INARAY,IGOT)
+c      IF(IGOT.NE.1) THEN
+c        IPAUSE=0
+c      ELSE
+c        IPAUSE=INARAY(1)
+c      ENDIF
+      print *,'PAUSE -1, NO PAUSE 0, DELAY >0'
+      READ(*,*) IPAUSE
+      CALL SETVIS(2,.TRUE.)
+      DO 910 I=3,NSEG
+        CALL SETVIS(I,.TRUE.)
+        IF(IPAUSE.EQ.-1) CALL GETUIN(-1,'CONTINUE?',1,INARAY,IGOT)
+        CALL SETVIS(I-1,.FALSE.)
+C       CALL NEWPAG
+        call wait(IPAUSE*1000)
+        IF(IPAUSE.EQ.-1) CALL GETUIN(-1,'CONTINUE?',1,INARAY,IGOT)
+910   CONTINUE
+      CALL GETUIN(-1,'AGAIN? 1, FINISH? 0',1,INARAY,IGOT)
+      CALL SETVIS(NSEG,.FALSE.)
+      IF(IGOT.EQ.1) THEN
+        IF(INARAY(1).EQ.1) GOTO 900
+      ENDIF
+      REWIND 30
+      REWIND 31
+      REWIND 32
+      REWIND 33
+      REWIND 34
+      CALL MAKCUR
+      GOTO 3
+9999  CONTINUE
+      call setvis(-1,.true.)
+      print *,'1-again, 0-quit'
+      read(*,*) iagain
+      if(iagain.eq.1) then
+        call setvis(-1,.false.)
+        goto 9999
+      endif
+      CALL GRSTOP1
+      STOP
+      END
+      subroutine wait(n)
+      do i=1,n
+        x=sin(real(i))
+      enddo
+      end
+

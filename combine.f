@@ -1,0 +1,159 @@
+C PROGRAM TO CONVERT OLD DATA SETS (SINGLE COMPLETE) TO NEW MULTIPLE
+C DATA SETS.
+C INPUT CONSISTS OF:
+C FIRST DATA SET, TO WHICH THE SECOND IS TO BE ADDED
+C   UNIT 1 <= INPUT&1 DATA B (RECFM F LRECL 130
+C TITLE  CARD 1 (A80) HED,7I6,F8.1)
+C        CARD 2 (7I6,F8.1)
+C              NUMNP,NUMEL,NUMCOL,NUMLEV,NUMGBC,NDT,INTER,DT
+C NUMNP  CARD 3'S (I6,I4,2E12.5,F10.2,F7.2,F9.2,F10.3,F10.1,F10.2,F10.3)
+C              N,KODE(N),X(N),Y(N),HTICE(N),
+C              ADOT(N),FRACT(N),PSURF(N),BDROCK(N),FLOWA(N),SLDGB(N)
+C NUMEL  CARD 4'S (5I6,1PE17.10)
+C              N,KX(N,1),KX(N,2),KX(N,3),KX(N,4),CONST(N)
+C NUMGBC CARD 5'S (2I6,E13.6)
+C              IBFLUX(N,1),IBFLUX(N,2),BFLUX(N)
+C SECOND DATA SET, TO BE ADDED TO THE FIRST
+C   UNIT 2 <= INPUT&1 DATA B (RECFM F LRECL 130
+C TITLE  CARD 1 (A80) HED,7I6,F8.1)
+C        CARD 2 (7I6,F8.1)
+C              NUMNP,NUMEL,NUMCOL,NUMLEV,NUMGBC,NDT,INTER,DT
+C NUMNP  CARD 3'S (I6,I4,2E12.5,F10.2,F7.2,F9.2,F10.3,F10.1,F10.2,F10.3)
+C              N,KODE(N),X(N),Y(N),HTICE(N),
+C              ADOT(N),FRACT(N),PSURF(N),BDROCK(N),FLOWA(N),SLDGB(N)
+C NUMEL  CARD 4'S (5I6,1PE17.10)
+C              N,KX(N,1),KX(N,2),KX(N,3),KX(N,4),CONST(N)
+C NUMGBC CARD 5'S (2I6,E13.6)
+C              IBFLUX(N,1),IBFLUX(N,2),BFLUX(N)
+C OUTPUT CONSISTS OF:
+C   UNIT 11 <= OUTPUT&1 DATA B (RECFM F LRECL 130
+C TITLE  CARD 1 (A80) HED,7I6,F8.1)
+C        CARD 2 (7I6,F8.1)
+C              NUMNP,NUMEL,NUMCOL,NUMLEV,NUMGBC,NDT,INTER,DT
+C NUMNP  CARD 3'S (I6I4,2E12.5,F10.2,F7.2,F9.2,F10.3,F10.1,F10.2,F10.3)
+C              N,KODE(N),X(N),Y(N),HTICE(N),
+C              ADOT(N),FRACT(N),PSURF(N),BDROCK(N),FLOWA(N),SLDGB(N)
+C NUMEL  CARD 4'S (5I6,1PE17.10)
+C              N,KX(N,1),KX(N,2),KX(N,3),KX(N,4),CONST(N)
+C NUMGBC CARD 5'S (2I6,E13.6)
+C              IBFLUX(N,1),IBFLUX(N,2),BFLUX(N)      
+      include "parameter.h"
+      PARAMETER(NMAX=MAXNUM)
+      IMPLICIT REAL*8(A-H,O-Z)
+      CHARACTER HED1*80,hed2*80
+      DIMENSION KODE1(NMAX),X1(NMAX),Y1(NMAX),HTICE1(NMAX),ADOT1(NMAX),
+     &          FRACT1(NMAX),PSURF1(NMAX),BDROCK1(NMAX),FLOWA1(NMAX),
+     &          SLDGB1(NMAX),KX1(NMAX,4),CONST1(NMAX),IBFLUX1(NMAX,2),
+     &          BFLUX1(NMAX),temp1(nmax),
+     &          itype1(nmax),AFUDGE1(NMAX),GEOFLUX1(NMAX),calv1(NMAX)
+      DIMENSION KODE2(NMAX),X2(NMAX),Y2(NMAX),HTICE2(NMAX),ADOT2(NMAX),
+     &          FRACT2(NMAX),PSURF2(NMAX),BDROCK2(NMAX),FLOWA2(NMAX),
+     &          SLDGB2(NMAX),KX2(NMAX,4),CONST2(NMAX),IBFLUX2(NMAX,2),
+     &          BFLUX2(NMAX),temp2(nmax),
+     &          itype2(nmax),AFUDGE2(NMAX),GEOFLUX2(NMAX),calv2(NMAX)
+C
+C READ FIRST DATA SET
+C
+      READ(1,1000) HED1,NUMNP,NUMEL,NUMCOL,NUMLEV,NUMGBC,NDT,INTER,DT
+      NUMNP1=NUMNP
+      NUMEL1=NUMEL
+      NUMGBC1=NUMGBC
+      NDT1=NDT
+      INTER1=INTER
+      DT1=DT
+      PRINT *,HED1
+      IF(NUMNP.GT.NMAX) THEN
+        PRINT *,'NUMNP=',NUMNP,' NMAX=',NMAX,' INCREASE NMAX'
+        STOP
+      ENDIF
+      DO N=1,NUMNP
+        READ(1,1001) NUM,KODE1(N),X1(N),Y1(N),HTICE1(N),
+     &               ADOT1(N),FRACT1(N),PSURF1(N),BDROCK1(N),
+     &               FLOWA1(N),SLDGB1(N),temp1(n),
+     &               itype1(n),AFUDGE1(N),GEOFLUX1(N),
+     &               calv1(n)
+      ENDDO
+      DO N=1,NUMEL
+        READ(1,1002) NUM,KX1(NUM,1),KX1(NUM,2),KX1(NUM,3),KX1(NUM,4),
+     &               CONST1(N)
+      ENDDO
+      IF(NUMGBC.GT.0) THEN
+        DO N=1,NUMGBC
+          READ(1,1007) IBFLUX1(N,1),IBFLUX1(N,2),BFLUX1(N)
+        ENDDO
+      ENDIF
+C
+C READ SECOND DATA SET
+C
+      READ(2,1000) HED2,NUMNP,NUMEL,NUMCOL,NUMLEV,NUMGBC,NDT,INTER,DT
+      NUMNP2=NUMNP
+      NUMEL2=NUMEL
+      NUMGBC2=NUMGBC
+      PRINT *,HED2
+      IF(NUMNP.GT.NMAX) THEN
+        PRINT *,'NUMNP=',NUMNP,' NMAX=',NMAX,' INCREASE NMAX'
+        STOP
+      ENDIF
+      DO N=1,NUMNP
+        READ(2,1001) NUM,KODE2(N),X2(N),Y2(N),HTICE2(N),
+     &               ADOT2(N),FRACT2(N),PSURF2(N),BDROCK2(N),
+     &               FLOWA2(N),SLDGB2(N),temp2(n),
+     &               itype2(n),AFUDGE2(N),GEOFLUX2(N),
+     &               calv2(n)
+      ENDDO
+      DO N=1,NUMEL
+        READ(2,1002) NUM,KX2(NUM,1),KX2(NUM,2),KX2(NUM,3),KX2(NUM,4),
+     &               CONST2(N)
+      ENDDO
+      IF(NUMGBC.GT.0) THEN
+        DO N=1,NUMGBC
+          READ(2,1007) IBFLUX2(N,1),IBFLUX2(N,2),BFLUX2(N)
+        ENDDO
+      ENDIF
+      if(.false.) then
+        DO M=1,NUMNP2
+          DO N=1,NUMNP1
+            IF(X1(N).EQ.X2(M) .AND. Y1(N).EQ.Y2(M)) THEN
+              PRINT *,'NODE',N,' IN FRST IS NODE',M,' IN SECOND'
+              KODE1(N)=KODE2(M)
+              HTICE1(N)=HTICE2(M)
+              ADOT1(N)=ADOT2(M)
+              FRACT1(N)=FRACT2(M)
+              PSURF1(N)=PSURF2(M)
+              BDROCK1(N)=BDROCK2(M)
+              FLOWA1(N)=FLOWA2(M)
+              SLDGB1(N)=SLDGB2(M)
+              TEMP1(N)=TEMP2(M)
+              GOTO 100
+            ENDIF
+          ENDDO
+          print *,'didnt find ',m,' in second data set'
+100       CONTINUE
+        ENDDO
+      endif
+      WRITE(11,1000) HED1,NUMNP1,NUMEL1,NUMCOL,NUMLEV,NUMGBC1,
+     &               NDT1,INTER1,DT1
+      DO N=1,NUMNP1
+        WRITE(11,1001) N,KODE1(N),X1(N),Y1(N),HTICE1(N),
+c     &               ADOT1(N),FRACT1(N),PSURF1(N),BDROCK1(N),
+     &               ADOT2(N),FRACT1(N),PSURF1(N),BDROCK1(N),
+     &               FLOWA1(N),SLDGB1(N),temp1(n),
+     &               itype1(n),AFUDGE1(N),GEOFLUX1(N),
+     &               calv1(n)
+      ENDDO
+      DO N=1,NUMEL1
+        WRITE(11,1002) N,KX1(N,1),KX1(N,2),KX1(N,3),KX1(N,4),
+     &               CONST1(N)
+      ENDDO
+      IF(NUMGBC1.GT.0) THEN
+        DO N=1,NUMGBC1
+          WRITE(11,1007) IBFLUX1(N,1),IBFLUX1(N,2),BFLUX1(N)
+        ENDDO
+      ENDIF
+1000  FORMAT (A80,/,7I6,F8.1)
+1002  FORMAT(5I6,1PE17.10)
+c 1001  FORMAT(I6,I4,2E12.5,F10.2,F7.2,F9.2,F10.3,F10.1,F10.2,2F10.3)
+1001  FORMAT(I6,I4,1P2E12.5,0PF10.2,F7.2,F9.2,F10.3,F10.1,F10.5,2F10.5,
+     &       I5,F10.3,F10.3,1PE10.3)
+1007  FORMAT(2I6,E13.6)
+      END
