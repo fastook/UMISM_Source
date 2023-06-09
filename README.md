@@ -18,3 +18,21 @@ packz.e E E WW
 
 ...  label numbers, output interval, start and end times to extract results displayed with generic.gmt
 
+Input files for UMISM using the climate model results from K. Scanlon's thesis can be generated and displayed with scanlon.e (runs executable scanlon.x)
+
+... scanlon.e 1 for the climate used, 42-1bar-diagfi3.nc, availble from a Dropbox link here: 
+
+https://www.dropbox.com/s/btrs5bbdm860r01/42-1bar-diagfi3.nc?dl=0
+
+Scanlon's thesis citation:
+
+@phdthesis{scanlon16a,
+	address = {Providence, RI},
+	author = {K. E. Scanlon},
+	date-added = {2016-06-19 17:11:22 +0000},
+	date-modified = {2016-06-19 17:14:52 +0000},
+	school = {Brown University},
+	title = {Ice Sheet Melting Throughout Mars Climate History: Mechanisms, Rates, and Implications},
+	year = {2016},
+
+
