@@ -1,0 +1,11 @@
+      SUBROUTINE ZOOM(X1,X2,Y1,Y2)
+      PRINT *,'DOESNT WORK'
+      END
+      FUNCTION IERRNM(TF)
+      LOGICAL TF
+      PRINT *,'DOESNT WORK'
+      IERRNM=0
+      END
+      SUBROUTINE INUMBR(I,J)
+      PRINT *,'DOESNT WORK'
+      END

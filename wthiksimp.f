@@ -1,0 +1,153 @@
+      SUBROUTINE WMOVERSIMP(NMAX, X, Y, KX, NTYPE, NUMNP, NUMEL, DT,
+     &                 ETA, XI, W, WTHICK, HTICE, DEPB, LM,
+     &                 BMELT, ALPHAC, TOTALW, TOTALP,IPLOT)
+c
+c ... a purely local water solver, simple 1/e leakage, with source=bmelt
+c
+      IMPLICIT REAL*8(A-H,O-Z)
+      DIMENSION BMELT(NMAX),ALPHAC(3)
+      DIMENSION LM(5),HTICE(NMAX),DEPB(NMAX)
+      DIMENSION KX(NMAX,4),X(NMAX),Y(NMAX),NTYPE(NMAX)
+      REAL*8 WTHICK(NMAX)
+
+      DIMENSION DPSIX(9),DPSIY(9),DXDS(2,2),DSDX(2,2)
+      DIMENSION PSI(4),DPSI(4,2)
+      DIMENSION XY(2,4),XI(2,9),ETA(2,9),W(2,9)
+
+      REAL*4 TB(2)
+c     REAL*4 TB(2),ETIME,DTIME
+c     EXTERNAL ETIME,DTIME
+      LOGICAL CTOGG,ITOGG,IOTOGG
+      INTEGER BTOGG,SLTOGG,WTOGG
+      COMMON /TOGGLES/ SLTOGG,CTOGG,WTOGG,ITOGG,BTOGG,IOTOGG,IPAGE
+123   FORMAT(A25,T30,1PG13.6,G13.6)
+      PARAMETER(NPAGE=39)
+      CHARACTER*80 LIST(1000)
+      COMMON /IOLIST/ LIST
+      SAVE ISTART,WSAVE,TSAVE,PSAVE
+      DATA ISTART /0/
+      AREAWET=0
+      AREATOT=0
+C ... CALL CHECKER THAT PUTS WATER ON/OFF ICE-FREE NODES
+c ... (LAST ARG IS VALUE TO PUT ON ICE-FREE NODES, ZERO IT BEFORE
+c     (turn on/off internally)
+      CALL CHECKER(NMAX, NUMNP, NUMEL, NTYPE, KX, HTICE, DEPB, 
+     &             WTHICK,0.0d0)
+      IF(ISTART.EQ.0) THEN
+        ISTART=1
+        WSAVE=TOTALW
+        IF(AREAWET.EQ.0.0) THEN
+          TSAVE=0D0
+        ELSE
+          TSAVE=100.D0*TOTALW/AREAWET
+        ENDIF
+        IF(AREATOT.EQ.0.0) THEN
+          PSAVE=0D0
+        ELSE
+          PSAVE=100.D0*AREAWET/AREATOT
+        ENDIF
+      ENDIF
+C
+      const=ALPHAC(3)
+      do i=1,numnp
+c ..... forward difference .....
+c        wthick(i)=wthick(i)+bmelt(i)*dt-const*wthick(i)*dt
+c ..... backward difference .....
+        wthick(i)=(wthick(i)+bmelt(i)*dt)/(1.+const*dt)
+      enddo
+
+
+
+C
+C ... ACCEPT ONLY THICKNESSES GREATER THAN OR EQUAL TO ZERO
+C ... ACCEPT ONLY THICKNESSES    LESS THAN OR EQUAL TO 10.0
+      DO JK=1,NUMNP
+         WTHICK(JK)=MAX(0D0,WTHICK(JK))
+         WTHICK(JK)=MIN(10D0,WTHICK(JK))
+      ENDDO
+C ..  CALL EDGE DETECTOR THAT ALLOWS LEAKAGE OUT EDGES
+c     (turn on/off internally)
+      CALL EDGENODE(NMAX, NUMNP, NUMEL, NTYPE, KX, HTICE, DEPB, 
+     &                WTHICK)
+      IF(.TRUE. .AND. IPLOT.EQ.8) THEN
+C       CALL NEWPAG
+C       CALL CONTR(NMAX,NUMEL,X,Y,KX,
+C    &                 HTICE,-2999.999D0,5500.D0,250.D0,
+C    &                 -1000.D0,1000.D0,-1000.D0,1000.D0)
+        CALL CONTR(NMAX,NUMEL,X,Y,KX,
+     &             WTHICK,-0.0999999999D0,1.000000001D0,0.1D0,
+     &            -1000.D0,1000.D0,-1000.D0,1000.D0)
+      ENDIF
+
+C ... BEGIN LOOP OVER ALL THE ELEMENTS ...
+      TOTALW=0.0D0
+      AREAWET=0.0D0
+      AREADRY=0.0D0
+      AREATOT=0.0D0
+      DO 100 N=1,NUMEL
+        DO I=1,4
+          LM(I)=KX(N,I)
+          XY(1,I)=X(LM(I))
+          XY(2,I)=Y(LM(I))
+        ENDDO
+        CALL FESHAPE(1,0D0,0D0,PSI,DPSI)
+        CALL DERIVE(XY,DXDS,DPSI,DETJ,DSDX,DPSIX,DPSIY)
+        TWTHIK=0.D0
+        DO I=1,4
+          TWTHIK=TWTHIK+WTHICK(LM(I))*PSI(I)
+        ENDDO
+C
+C ..... ACCUMULATE INTEGRATION POINT VALUES OF INTEGRALS
+        DO L=1,9
+          CALL FESHAPE(1,XI(1,L),ETA(1,L),PSI,DPSI)
+          CALL DERIVE(XY,DXDS,DPSI,DETJ,DSDX,DPSIX,DPSIY)
+          FAC=DETJ*W(1,L)
+          TOTALW=TOTALW+TWTHIK*FAC
+          IF(TWTHIK.GT.0.0) THEN
+            AREAWET=AREAWET+FAC
+          ELSE
+            AREADRY=AREADRY+FAC
+          ENDIF
+          AREATOT=AREATOT+FAC
+        ENDDO
+C ..... ADD ELEMENT CONDUCTIVITY TO COMPLETE CONDUCTIVITY MATRIX
+C
+100   CONTINUE
+C ... END LOOP OVER ALL THE ELEMENTS ...
+C
+C
+      RATIOW=(TOTALW-WSAVE)/DT
+      TOTALT=100.D0*TOTALW/AREAWET
+      TOTALP=100.D0*AREAWET/AREATOT
+      RATIOT=(TOTALT-TSAVE)/DT
+      RATIOP=(TOTALP-PSAVE)/DT
+      IF(IOTOGG) THEN
+        WRITE(LIST(IPAGE+1),*)
+     &       '********************************************'
+        WRITE(LIST(IPAGE+2),*) 
+     &         'TOTAL WATER (KM**3)=',REAL(1D-9*TOTALW),
+     &         REAL(1D-9*RATIOW),REAL(1D-9*RATIOW*DT)
+C       WRITE(LIST(IPAGE+1),*) 'WET AREA    (KM**2)=',REAL(1D-6*AREAWET)
+C       WRITE(LIST(IPAGE+1),*) 'DRY AREA    (KM**2)=',REAL(1D-6*AREADRY)
+C       WRITE(LIST(IPAGE+1),*) 'TOTAL AREA  (KM**2)=',REAL(1D-6*AREATOT)
+        WRITE(LIST(IPAGE+3),*) 'PERCENT WET        =',REAL(TOTALP),
+     &         REAL(RATIOP),REAL(RATIOP*DT)
+        WRITE(LIST(IPAGE+4),*) 'AVG THICK   ( CM  )=',REAL(TOTALT),
+     &         REAL(RATIOT),REAL(RATIOT*DT)
+        WRITE(LIST(IPAGE+5),*) 
+     &       '********************************************'
+        IPAGE=IPAGE+5
+      ENDIF
+      WSAVE=TOTALW
+      PSAVE=TOTALP
+      TSAVE=TOTALT
+C ... CALL CHECKER THAT PUTS WATER ON/OFF ICE-FREE NODES
+c ... (LAST ARG IS VALUE TO PUT ON ICE-FREE NODES, 0.1 IT AFTER
+c     (turn on/off internally)
+      CALL CHECKER(NMAX, NUMNP, NUMEL, NTYPE, KX, HTICE, DEPB, 
+     &             WTHICK,0.0d0)
+      END
+
+
+
+

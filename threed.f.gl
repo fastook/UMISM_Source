@@ -1,0 +1,640 @@
+      subroutine threed(ipass,npts,nelem,x,y,htice,bdrock,kx)
+      include "parameter.h"
+      parameter(nmax=MAXNUM)
+      include "fshort.h"
+      real*8 x,y,htice,bdrock
+      dimension x(nmax),y(nmax),htice(nmax),bdrock(nmax),kx(nmax,4)
+      real xyzbed(3,nmax),xyzsrf(3,nmax),xyzgrd(3,nmax)
+      integer icxyzb(nmax),icxyzs(nmax),kxp(nmax,4)
+      common /plotdata/ numnp,numel,xyzbed,xyzsrf,xyzgrd,
+     &                  kxp,icxyzb,icxyzs
+      ipass=0
+      numnp=npts
+      numel=nelem
+      XMAX=-1.E30
+      YMAX=-1.E30
+      ZMAXB=-1.E30
+      ZMAXS=-1.E30
+      XMIN=1.E30
+      YMIN=1.E30
+      ZMINB=1.E30
+      ZMINS=1.E30
+      do i=1,numel
+        do j=1,4
+          kxp(i,j)=kx(i,j)
+        enddo
+      enddo
+      do i=1,numnp
+c america upright
+        xmin=min(xmin,real(x(i)))
+        xmax=max(xmax,real(x(i)))
+        ymin=min(ymin,real(y(i)))
+        ymax=max(ymax,real(y(i)))
+        zmins=min(zmins,real(htice(i)))
+        zmaxs=max(zmaxs,real(htice(i)))
+        zminb=min(zminb,real(bdrock(i)))
+        zmaxb=max(zmaxb,real(bdrock(i)))
+        xyzbed(1,i)=real(x(i))
+        xyzbed(2,i)=real(y(i))
+        xyzsrf(1,i)=real(x(i))
+        xyzsrf(2,i)=real(y(i))
+        xyzgrd(1,i)=real(x(i))
+        xyzgrd(2,i)=real(y(i))
+c europe upright
+c       xyzbed(1,i)=y(i)
+c       xyzbed(2,i)=-x(i)
+c       xyzsrf(1,i)=y(i)
+c       xyzsrf(2,i)=-x(i)
+c       xyzgrd(1,i)=y(i)
+c       xyzgrd(2,i)=-x(i)
+c europe upright
+        xyzbed(3,i)=real(bdrock(i))
+        xyzsrf(3,i)=real(htice(i))
+        xyzgrd(3,i)=real(htice(i))
+      enddo
+      zmin=min(zmins,zminb)
+      zmax=max(zmaxs,zmaxb)
+      print *,' x ',xmin,xmax
+      print *,' y ',ymin,ymax
+      print *,' z ',zmin,zmax
+      print *,' s ',zmins,zmaxs
+      print *,' b ',zminb,zmaxb
+      if(zmins.eq.zmaxs) zmaxs=zmins+1.
+      if(zminb.eq.zmaxb) zmaxb=zminb+1.
+      if(zmin.eq.zmax) zmax=zmin+1.
+      if(iplot.eq.1) then
+        if(abs(zmin).gt.abs(zmax)) then
+          zmax=-zmin
+        else
+          zmin=-zmax
+        endif
+      endif
+c      zmin=-2000.
+c      zmax=1000.
+      xwid=xmax-xmin
+      ywid=ymax-ymin
+      if(xwid.gt.ywid) then
+        ywid=xwid
+        ymax=ymin+ywid
+      else
+        xwid=ywid
+        xmax=xmin+xwid
+      endif
+c determine color for each of the elements
+      do i=1,numnp
+        valueb=xyzbed(3,i)
+        values=xyzsrf(3,i)
+c        icb=izset3d(180,valueb,-2875.,5875./180.,0)
+c        ics=izset3d(30,values,0.,3000./30.,1)
+        icb=izset3d(180,valueb,zminb,(zmaxb-zminb)/180.,0)
+        ics=izset3d(30,values,zmins,(zmaxs-zmins)/30.,1)
+        icxyzs(i)=31-ics+129
+        icxyzb(i)=icb+190
+        if(values.eq.0. .or. abs(values-valueb).lt..1) then
+          icxyzs(i)=BLUE
+        endif
+c        print *,i,icxyzs(i)
+
+      enddo
+c scale all three to fit in -200 => +200 box with sea level at zero
+      zmag=50.
+      do i=1,numnp
+        xyzbed(1,i)=-200.+400.*(xyzbed(1,i)-xmin)/(xmax-xmin)
+        xyzsrf(1,i)=-200.+400.*(xyzsrf(1,i)-xmin)/(xmax-xmin)
+        xyzgrd(1,i)=-200.+400.*(xyzgrd(1,i)-xmin)/(xmax-xmin)
+        xyzbed(2,i)=-200.+400.*(xyzbed(2,i)-ymin)/(ymax-ymin)
+        xyzbed(3,i)=-zmag+2.*zmag*(xyzbed(3,i)-zmin)/(zmax-zmin)
+        xyzsrf(2,i)=-200.+400.*(xyzsrf(2,i)-ymin)/(ymax-ymin)
+        xyzsrf(3,i)=-zmag+2.*zmag*(xyzsrf(3,i)-zmin)/(zmax-zmin)
+        xyzgrd(2,i)=-200.+400.*(xyzgrd(2,i)-ymin)/(ymax-ymin)
+        xyzgrd(3,i)=-zmag+2.*zmag*(xyzgrd(3,i)-zmin)/(zmax-zmin)+1.
+      enddo
+      call drawall
+      end
+c=================================================================
+      subroutine drawall
+c #include <gl/fgl.h>
+c #include <gl/fdevice.h>
+      include "fshort.h"
+
+        common /matrix_stuff/ objmat(4,4), aidmat(4,4)
+        common /mouse_stuff/  iomx, mx, iomy, my
+        common /machzval/     izfar
+        common /menustuff/ isurf,ibed,iprof,ipanel
+
+        data objmat /1.0, 0.0, 0.0, 0.0,
+     &               0.0, 1.0, 0.0, 0.0,
+     &               0.0, 0.0, 1.0, 0.0,
+     &               0.0, 0.0, 0.0, 1.0/
+
+        data aidmat /1.0, 0.0, 0.0, 0.0,
+     &               0.0, 1.0, 0.0, 0.0,
+     &               0.0, 0.0, 1.0, 0.0,
+     &               0.0, 0.0, 0.0, 1.0/
+
+        data NSTEP/5/
+
+	integer dev
+        integer*2 val
+        integer testifZinst
+
+
+        call initialize
+        imenu=newpup()
+        call addtop(imenu,"top|profiles|bottom|all|panel|magnify",38)
+        isurf=-1
+        ibed=1
+        iprof=1
+        ipanel=1
+
+        testifZinst = getzbu()
+        if (testifZinst .eq. 0) then
+	    write(*,*) 'BUMmer!--zrgb will not work on this machine'
+	    write(*,*) '        -no zbuffer option is installed.'
+	    go to 999
+        end if
+        izfar = getgde(GDZMAX)
+        icont=0
+
+        call draw_scene
+
+        do while (.true.)
+          if(icont.eq.1) then
+              call draw_scene
+          else
+            dev = qread(val)
+            if (dev .eq. ESCKEY) then
+                if (val .eq. 0) goto 999
+            elseif(dev .eq. KEYBD .and. val.eq.97) then
+               icont=0
+            else if (dev .eq. REDRAW) then
+               call reshap
+               call draw_scene
+            elseif(dev.eq.MKEY) then
+              if(val.eq.0) then
+                imsave=imval
+                imval=dopup(imenu)
+                if(imval.eq.6) then
+                  print *,'input factor'
+                  read(*,*) factor
+                  write(99,*) factor
+                  call magnify(factor)
+                endif
+                if(imval.eq.1) then
+                  isurf=-isurf
+                elseif(imval.eq.2) then
+                  iprof=-iprof
+                elseif(imval.eq.3) then
+                  ibed=-ibed
+                elseif(imval.eq.4) then
+                  isurf=1
+                  ibed=1
+                  iprof=1
+                elseif(imval.eq.5) then
+                  ipanel=-ipanel
+                endif
+                call draw_scene
+              endif
+            elseif(dev.eq.RIGHTM) then
+               if (val .ne. 0) then
+                   dowhile(dev.ne.MOUSEX)
+                     dev=qread(val)
+                     if(dev.eq.MOUSEX) iox=val
+                   enddo 
+                   dowhile(dev.ne.MOUSEY)
+                     dev=qread(val)
+                     if(dev.eq.MOUSEY) ioy=val
+                   enddo 
+               else
+                   dowhile(dev.ne.MOUSEX)
+                     dev=qread(val)
+                     if(dev.eq.MOUSEX) ix=val
+                   enddo 
+                   dowhile(dev.ne.MOUSEY)
+                     dev=qread(val)
+                     if(dev.eq.MOUSEY) iy=val
+                   enddo 
+                   ixstep=(ix-iox)/NSTEP
+                   iystep=(iy-ioy)/NSTEP
+                   do n=1,NSTEP
+                     call shift(ixstep,iystep)
+                     call draw_scene
+                   enddo
+               end if
+            elseif(dev.eq.MIDDLE) then
+               if (val .ne. 0) then
+                   dowhile(dev.ne.MOUSEX)
+                     dev=qread(val)
+                     if(dev.eq.MOUSEX) iozoom=val
+                   enddo 
+               else
+                   dowhile(dev.ne.MOUSEX)
+                     dev=qread(val)
+                     if(dev.eq.MOUSEX) izoom=val
+                   enddo 
+                   ixstep=(izoom-iozoom)/NSTEP
+                   do n=1,NSTEP
+                     call zoom3d(ixstep)
+                     call draw_scene
+                   enddo
+               end if
+            else if (dev .eq. LEFTMO) then
+               if (val .ne. 0) then
+                   dowhile(dev.ne.MOUSEX)
+                     dev=qread(val)
+                     if(dev.eq.MOUSEX) iomx=val
+                   enddo 
+                   dowhile(dev.ne.MOUSEY)
+                     dev=qread(val)
+                     if(dev.eq.MOUSEY) iomy=val
+                   enddo 
+               else
+                   dowhile(dev.ne.MOUSEX)
+                     dev=qread(val)
+                     if(dev.eq.MOUSEX) mx=val
+                   enddo 
+                   dowhile(dev.ne.MOUSEY)
+                     dev=qread(val)
+                     if(dev.eq.MOUSEY) my=val
+                   enddo 
+                   ixstep=(mx-iomx)/NSTEP
+                   iystep=(iomy-my)/NSTEP
+                   do n=1,NSTEP
+                     call orient(ixstep,iystep)
+                     call draw_scene
+                   enddo
+               end if
+            end if
+          endif
+        end do
+
+999     continue
+
+        call offmap1
+        call gexit
+	return
+        end
+c==============================================================================
+        subroutine initialize
+
+c #include <gl/fgl.h>
+c #include <gl/fdevice.h>
+      include "fshort.h"
+        CALL PREFPO(50,50+850,200,200+850)
+        call foregr
+        call keepas (4, 4)
+        igid = winope ('My Window', 9)
+        call double
+c       call RGBmod
+        call cmode
+        call gconfi
+        call zbuffe (.TRUE.)
+
+        call qdevic (ESCKEY)
+        call qdevic (KEYBD)
+        call qdevic (MKEY)
+        call qdevic (LEFTMO)
+        call qdevic (MIDDLE)
+        call qdevic (RIGHTM)
+        call qdevic (MOUSEX)
+        call qdevic (MOUSEY)
+        call shadem (GOURAU)
+        call onmap1
+
+        return
+        end
+c==============================================================================
+        subroutine draw_scene
+
+c #include <gl/fgl.h>
+      include "fshort.h"
+
+        common /matrix_stuff/ objmat(4,4), aidmat(4,4)
+        common /machzval/     izfar
+
+
+c       call czclea($00C86428, izfar)
+        call zclear
+c       call color(BLACK)
+c       call color(8)
+c       call clear
+
+c       call perspe (400, 1.25, 30.0, 60.0)
+        call ortho(-350.0,350.0,-350.0,350.0,-350.0,1000.0)
+c       call transl (0.0, 0.0, -40.0)
+        call multma (objmat)
+c  to skew original view so all things are more visible initially
+c       call rotate (-580, 'y')
+        call mydisplay
+
+        call swapbu
+
+        return
+        end
+c==============================================================================
+      subroutine mydisplay
+c #include <gl/fgl.h>
+c #include <gl/fdevice.h>
+      include "fshort.h"
+      include "parameter.h"
+      parameter(nmax=MAXNUM)
+      real      xyzbed(3,nmax),xyzsrf(3,nmax),xyzgrd(3,nmax)
+      integer   kx(nmax,4),icxyzb(nmax),icxyzs(nmax),iccopy(nmax)
+      integer checkblue,check
+      external checkblue
+      common /plotdata/ numnp,numel,xyzbed,xyzsrf,xyzgrd,
+     &                  kx,icxyzb,icxyzs
+      common /menustuff/ isurf,ibed,iprof,ipanel
+c load object into frame buffer
+c     call makeob(1)
+c      print *,'mydisplay',numel
+c the box that encloses the surface qqqqqq
+      if(ipanel.eq.1) then
+        call color(8)
+c        call color(WHITE)
+      else
+        call color(BLACK)
+      endif
+        call clear
+      call box
+c the surface
+      if(ipanel.eq.1) then
+c solid figure
+        do 100 i=1,numel
+         check=checkblue(nmax,i,icxyzs,kx,iccopy)
+         if(isurf.eq.1) then
+          if(check.eq.0) then
+c          print *,100,i,numel
+          call bgnpol
+            do 70 j=1,4
+c               print *,i,j,kx(i,j),icxyzs(kx(i,j))
+               call color(icxyzs(kx(i,j)))
+               call v3f(xyzsrf(1,kx(i,j)))
+70          continue
+          call endpol
+          elseif(check.eq.1 .or. check.eq.2 .or. check.eq.3) then
+          call bgnpol
+            do 80 j=1,4
+               call color(15)
+               call v3f(xyzsrf(1,kx(i,j)))
+80          continue
+          call endpol
+          else
+          call bgnpol
+            do 85 j=1,4
+               call color(BLUE)
+               call v3f(xyzbed(1,kx(i,j)))
+85          continue
+          call endpol
+          endif
+         endif
+         if(ibed.eq.1) then
+          call bgnpol
+            do 90 j=1,4
+               call color(icxyzb(kx(i,j)))
+               call v3f(xyzbed(1,kx(i,j)))
+90          continue
+          call endpol
+          call bgnclo
+            do j=1,4
+               call color(BLACK)
+               call v3f(xyzgrd(1,kx(i,j)))
+            enddo
+          call endclo
+         endif
+100     continue
+      else
+c wireframe figure
+        do 101 i=1,numel
+          check=checkblue(nmax,i,icxyzs,kx,iccopy)
+          if(isurf.eq.1) then
+c         if(check.eq.0) then
+          call bgnclo
+            do 71 j=1,4
+               call color(icxyzs(kx(i,j)))
+               call v3f(xyzsrf(1,kx(i,j)))
+71          continue
+          call endclo
+c         else
+c         call bgnclo
+c           do 81 j=1,4
+c              call color(icxyzb(kx(i,j)))
+c              call v3f(xyzbed(1,kx(i,j)))
+81          continue
+c         call endclo
+c         endif
+         endif
+         if(ibed.eq.1) then
+          call bgnclo
+            do 91 j=1,4
+               call color(icxyzb(kx(i,j)))
+               call v3f(xyzbed(1,kx(i,j)))
+91          continue
+          call endclo
+         endif
+101     continue
+      endif
+c close the object
+c     call closeo
+c     call callob(1)
+      return
+      end
+c==============================================================================
+      subroutine box
+c #include <gl/fgl.h>
+c #include <gl/fdevice.h>
+      include "fshort.h"
+      integer iv1(3),iv2(3),iv3(3),iv4(3),iv5(3),iv6(3),iv7(3),iv8(3)
+      data iv1 /-200,-200,-200/
+      data iv2 / 200,-200,-200/
+      data iv3 / 200, 200,-200/
+      data iv4 /-200, 200,-200/
+      data iv5 /-200,-200, 200/
+      data iv6 / 200,-200, 200/
+      data iv7 / 200, 200, 200/
+      data iv8 /-200, 200, 200/
+      
+      call color(BLUE)
+      call bgnclo
+        call v3i(iv1)
+        call v3i(iv2)
+        call v3i(iv3)
+        call v3i(iv4)
+      call endclo
+      call color(GREEN)
+      call bgnclo
+        call v3i(iv5)
+        call v3i(iv6)
+        call v3i(iv7)
+        call v3i(iv8)
+      call endclo
+      call color(WHITE)
+      call bgnlin
+        call v3i(iv1)
+        call v3i(iv5)
+      call endlin
+      call bgnlin
+        call v3i(iv2)
+        call v3i(iv6)
+      call endlin
+      call bgnlin
+        call v3i(iv3)
+        call v3i(iv7)
+      call endlin
+      call bgnlin
+        call v3i(iv4)
+        call v3i(iv8)
+      call endlin
+      end
+c==============================================================================
+      integer function checkblue(nmax,i,icxyzs,kx,iccopy)
+c #include <gl/fgl.h>
+c #include <gl/fdevice.h>
+      include "fshort.h"
+      dimension icxyzs(nmax),kx(nmax,4),iccopy(nmax)
+      checkblue=0
+      do j=1,4
+        if(icxyzs(kx(i,j)).eq.BLUE) then
+          checkblue=checkblue+1
+        endif
+      enddo
+      end
+c==============================================================================
+      function izset3d(ncolor,zzz,zf,zd,ioff)
+      imax=ncolor+ioff
+      imin=ioff+1
+        ic=imax-nint((zzz-zf)/zd-.5)
+      if(ic.lt.imin) ic=imin
+      if(ic.gt.imax) ic=imax
+      izset3d=ic
+      return
+      end
+c==============================================================================
+        subroutine shift(ixstep,iystep)
+      include "fshort.h"
+        common /matrix_stuff/ objmat(4,4), aidmat(4,4)
+        call pushma
+        call loadma (aidmat)
+        x=ixstep
+        y=iystep
+        z=0.
+        call transl(x,y,z)
+        call multma (objmat)
+        call getmat (objmat)
+        call popmat
+        end
+c==============================================================================
+        subroutine zoom3d(ixstep)
+      include "fshort.h"
+        common /matrix_stuff/ objmat(4,4), aidmat(4,4)
+        call pushma
+        call loadma (aidmat)
+        x=(100.+ixstep)/100.
+        y=(100.+ixstep)/100.
+        z=(100.+ixstep)/100.
+        call scale(x,y,z)
+        call multma (objmat)
+        call getmat (objmat)
+        call popmat
+        end
+c==============================================================================
+        subroutine orient(ixstep,iystep)
+
+c #include <gl/fgl.h>
+c #include <gl/fdevice.h>
+      include "fshort.h"
+
+        common /matrix_stuff/ objmat(4,4), aidmat(4,4)
+
+
+        call pushma
+        call loadma (aidmat)
+
+        call rotate (ixstep, 'y')
+        call rotate (iystep, 'x')
+
+        call multma (objmat)
+        call getmat (objmat)
+
+        call popmat
+
+        return
+        end
+
+c==============================================================================
+      subroutine onmap1
+      common /colors/ ncolor,redchanl,grechanl,bluchanl
+      integer   redchanl(300), grechanl(300), bluchanl(300)
+      integer*2 redval, greval, bluval
+      integer ired(300),igreen(300),iblue(300)
+c read in color.map
+      rewind 71
+      ncolor=0
+      do i=1,250
+        read(71,*,end=9) ired(i),igreen(i),iblue(i)
+        ncolor=i
+      enddo      
+9     continue
+      if(ncolor.gt.0) then
+c  get the original color values from 128 up to 128+ncolor and save them into
+c  their three respective arrays
+        j = 1
+        do i = 128, ncolor+128
+           call getmco(i, redval, greval, bluval)
+           redchanl(j) = redval
+           grechanl(j) = greval
+           bluchanl(j) = bluval
+           j = j + 1
+        end do
+
+C  Load the color map with entries from color.map
+        do i = 1, ncolor
+           call mapcol(127+i, ired(i) , igreen(i) ,iblue(i))
+        end do
+      endif
+      end
+c==============================================================================
+      subroutine offmap1
+      common /colors/ ncolor,redchanl,grechanl,bluchanl
+      integer   redchanl(300), grechanl(300), bluchanl(300)
+
+c  now that we are finished, restore the original color index values
+      if(ncolor.gt.0) then
+        j = 1
+        do i = 128, ncolor+128
+	   call mapcol(i, redchanl(j), grechanl(j), bluchanl(j))
+	   j = j + 1
+        end do
+      endif
+      end
+c==============================================================================
+      real function fmin(n,arr)
+      real*8 arr(n)
+      fmin=1e30
+      do i=1,n
+        fmin=min(fmin,arr(i))
+      enddo
+      end
+c==============================================================================
+      real function fmax(n,arr)
+      real*8 arr(n)
+      fmax=-1e30
+      do i=1,n
+        fmax=max(fmax,arr(i))
+      enddo
+      end
+c==============================================================================
+      subroutine magnify(factor)
+      include "parameter.h"
+      parameter(nmax=MAXNUM)
+      include "fshort.h"
+      real xyzbed(3,nmax),xyzsrf(3,nmax),xyzgrd(3,nmax)
+      integer icxyzb(nmax),icxyzs(nmax),kxp(nmax,4)
+      common /plotdata/ numnp,numel,xyzbed,xyzsrf,xyzgrd,
+     &                  kxp,icxyzb,icxyzs
+      do i=1,numnp
+        xyzbed(3,i)=xyzbed(3,i)*factor
+        xyzsrf(3,i)=xyzsrf(3,i)*factor
+        xyzgrd(3,i)=xyzgrd(3,i)*factor
+      enddo
+      end
