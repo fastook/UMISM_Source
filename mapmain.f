@@ -1,0 +1,472 @@
+      PARAMETER( MXX=29999, MCOL=171 )
+      IMPLICIT REAL*8(A-H,O-Z)
+C ***************************************************************C
+C                                                                C
+C   PROGRAM:  MAP5                                               C
+C                                                                C
+C   DATE:  8-24-90                                               C
+C   PROGRAMMER:  J.  FASTOOK                                     C
+C                                                                C
+C   FUNCTION:                                                    C
+C           THIS IS A PROGRAM TO MODEL THE FLOW OF A GLACIER     C
+C           WITH MATERIAL PROPERTIES READ FOR EACH NODAL POINT   C
+C           AND THE AVERAGE USED FOR THE ELEMENT.                C
+C           IT CALCULATES AN ELEMENT MATRIX ALA BECKER, 2-D      C
+C           PROGRAM WITH LINEAR SHAPE FUNCTIONS.                 C
+C           DOES TIME DEPENDENT CASE USING A LUMPED CAPACITANCE  C
+C           MATRIX AND A BACKWARD DIFFERENCE SCHEME. ALLOWING    C
+C           FOR VERY QUICK OPERATION, HOWEVER, MATERIAL PROPS    C
+C           ARE HELD CONSTANT THRUOUT THE TIME ITERATIONS        C
+C           SO THAT THE FINAL EQUILIBRIUM STATE DIFFERS SLIGHLTY C
+C           FROM ONE WHICH RECALCULATED THE STIFFNESS MAATRIX AT C
+C           EACH TIME STEP                                       C
+C           THIS IS HANDLED BY OUTPUTING A COMPLETE DATA SET AT  C
+C           THE END OF THE TIME STEP, (INDEED AT THE END OF      C
+C           EVERY PROGRAM RUN SO THAT BY TIME STEPPING ONE STEP  C
+C           AT A TIME AND USING THE NEW DATA SET IT IS AS IF THE C
+C           COMPLETE MATRIX WERE REDEVELOPED AT EACH STEP.       C
+C                                                                C
+C ***************************************************************C
+C     PROGRAM FOR STEADY AND UNSTEADY STATE FLOW ANALYSIS
+C     USING FINITE ELEMENTS
+C RUN BY MAP5 EXEC A:
+C       FI * CLEAR
+C       FI 30 DISK INPUT&1 HEAD B
+C       FI 31 DISK INPUT&1 GRID B
+C       FI 32 DISK INPUT&1 DIFF B
+C       FI 33 DISK INPUT&1 TIME B
+C       FI 34 DISK OUT&2 TIME B
+C       FI 10 DISK OUTLINE DATA B (LRECL 80 RECFM F
+C       FI 7 DISK OUT1&2 DATA B (LRECL 130 RECFM F
+C       FI 12 DISK OUT2&2 DATA B (LRECL 130 RECFM F
+C       FI 11 DISK OUT3&2 DATA B (LRECL 130
+C       FI 21 DISK OUT4&2 DATA B (LRECL 130
+C       FI 20 DISK LINEM DATA B (LRECL 80
+C       FI 26 DISK OUTPUT&2 DATA B (LRECL 130
+C       FI 13 DISK MAT&2 DATA B
+C       FI 18 DISK VOL&2 DATA B
+C       FI 17 DISK VOLT&2 DATA B
+C       GL TXT  VSF2FORT CMSLIB IGLLIB ESSL
+C       LOAD MAP5 (START NOMAP
+      CHARACTER*80 HED,SCRTCH
+      COMMON /SYMARG/ NUMNP,MBAND,A(MCOL,MXX),Q(MXX)
+      DIMENSION IFIT(6), AMASS(9), B(MXX), X(MXX), Y(MXX), D(MXX),
+     &          KODE(MXX), CONST(MXX), LM(5), IX(3), E(3,3),
+     &          KX(MXX,4), P(5), S(5,5), DD(5), IDT(MXX),
+     &          ADOT(MXX), BDROCK(MXX), FLOWA(MXX), SLDGB(MXX),
+     &          PSURF(MXX), PPSURF(MXX), FRACT(MXX),TEMP(MXX),
+     &          CNEW(MXX), QHOLD(MXX), HTICE(MXX), THICK(MXX),
+     &          HFIT(MXX), IBFLUX(MXX,2), BFLUX(MXX), DEPB(MXX),
+     &          UNDEPB(MXX), SLOPE(4,MXX), SLOPN(4,MXX), KZ(MXX)
+
+      DIMENSION TTIME(10000),VVOL(10000),AAREA(10000)
+      DIMENSION NTYPE(MXX), NNODE(MXX),
+     &          DPSIX(9), DPSIY(9), DXDS(2,2), DSDX(2,2),
+     &          PSI(4), DPSI(4,2), CNST(MXX),
+     &          XY(2,4), XI(2,9), ETA(2,9), W(2,9),
+     &          AADOT(MXX), AFRACT(MXX), AFLOWA(MXX),
+     &          ABDRCK(MXX), ASLDGB(MXX)
+      REAL*8 T(MXX)
+      COMMON /LAPSE/ ACOM,HMAX,WINDIR(2)
+      DATA HFIT /MXX*0.0/
+      ACOM=-9.6237669
+      DO I=1,5
+        IFIT(I)=0
+      ENDDO
+      IFIT(6)=1
+C     CALL XUFLOW(0)
+C FOLLOWING IS DEFAULT SNOWLINE ELEVATION AT POLE AND GRADIENT
+      AMASS(7)=-3000.
+      AMASS(8)=.56E-3
+      AMASS(8)=.001
+      AMASS(9)=-14.
+C **** FOLLOWING IS SEALEVEL REFERENCED TO PRESENT=0.
+      NTSTEP=0
+      SEALEV=0.
+C **** FOLLOWING SETS RATE OF CONVERGENCE, UP TO 5 WORKS WELL
+      CONV=1.
+      TIME=0.0
+      RHOW=1.092
+      PG = 0.089866*0.3816
+      NUMCOL=0
+      NUMLEV=0
+      NCOL=MCOL
+C
+C     INITIALIZE INTEGRATION POINTS AND WEIGHTS
+C     GAUSSIAN QUADRATURE OF ORDER THREE QUADRILATERALS
+      CALL GAUSINIT(XI,ETA,W)
+C
+      DO 10 I=1,4
+        LM(I)=0
+10    CONTINUE
+C
+C **** FOLLOWING READN FOR NEW SPLIT DATA SETS
+      CALL READN(MXX, IDEP, HED, NUMNP, NUMEL, NUMGBC, NDT,
+     &           INTER, DT, KODE, X, Y, HTICE, ADOT, FRACT,
+     &           PSURF, RHOI, BDROCK, UNDEPB, FLOWA, SLDGB,TEMP,
+     &           THICK, KX, CONST, IBFLUX, BFLUX, QHOLD,
+     &           NTYPE, NNODE, NCOL, DEPB, AADOT, AFRACT,
+     &           ABDRCK, PPSURF, AFLOWA, ASLDGB, IDT, AMASS)
+      DO 90 I=1,NUMNP
+        Q(I)=HTICE(I)
+        T(I)=HTICE(I)
+90    CONTINUE
+C
+C SET LINEARIZATION CONSTANT USING INITIAL CONFIGURATION
+      CALL NCONST(MXX, IDEP, X, Y, KX, NTYPE, NUMEL,
+     &            AFRACT, ASLDGB, LM, AFLOWA, BDROCK, DEPB,
+     &            UNDEPB, PG, Q, CNEW, SLOPE, RHOI, WINDIR)
+C
+      WRITE(*,*) 'TIME STEP=',DT
+      WRITE(*,*) 'INPUT 1 TO CALL ADJUST, 0 TO BYPASS'
+      READ(*,*) IADJ
+      WRITE(99,*) IADJ
+      IF(IADJ.EQ.1) THEN
+C
+C CALCULATE SLOPES IN CASE NEEDED BY ADJUST
+        CALL NODESL(MXX, NUMNP, NUMEL, KX, SLOPE, SLOPN)
+C
+C ENTER INTERACTIVE DATA SET MANIPULATOR
+        CALL ADJUST(HED, NUMNP, NUMEL, X, Y, HTICE, ADOT, FRACT,
+     &              TEMP,
+     &         PSURF, BDROCK, DEPB, FLOWA, SLDGB, THICK, KX, CONST,
+     &              NNODE, KODE, HFIT, NUMCOL, NUMLEV, NUMGBC, NDT,
+     &              INTER, DT, IBFLUX, BFLUX, MXX, IDT, SLOPN, AMASS,
+     &              TIME, NTSTEP,TTIME,VVOL,AAREA,IFIT,ITOGG,IPLOT)
+C
+      ENDIF
+      DO 91 I=1,NUMNP
+        Q(I)=HTICE(I)
+91    CONTINUE
+C
+C LOAD NODAL PROPERTIES INTO ELEMENT PROPERTIES
+      CALL ELPROP(MXX, NUMEL, NTYPE, KX, ADOT, AADOT, FRACT, AFRACT,
+     &            BDROCK, ABDRCK, PSURF, PPSURF, FLOWA, AFLOWA,
+     &            SLDGB, ASLDGB)
+C
+C
+C
+C
+C
+C                      *** MAIN LOOP ***
+C
+C
+C
+215   CONTINUE
+C
+C       FOLLOWING CALCULATES NODE SLOPE FROM ELEMENT SLOPE
+        CALL NODESL(MXX, NUMNP, NUMEL, KX, SLOPE, SLOPN)
+C
+C       FOLLOWING ADJUSTS ADOT FOR FITTEED ACCUMULATION
+        DO 101 I=1,NUMNP
+          IF(IDT(I).GT.0) THEN
+            ADOT(I)=AFUNCT(TIME, IDT(I), AMASS,
+     &                                 Q(I), BDROCK(I),
+     &                                 SLOPN(1,I),X(I),Y(I),
+     &                                 TEMP(I))
+          ENDIF
+101     CONTINUE
+C
+C LOADS NEW NODAL MATERIAL PROPERTIES INTO ELEMENT MATERIAL PROPERTIES
+        CALL ELPROP(MXX, NUMEL, NTYPE, KX, ADOT, AADOT, FRACT, AFRACT,
+     &            BDROCK, ABDRCK, PSURF, PPSURF, FLOWA, AFLOWA,
+     &            SLDGB, ASLDGB)
+C
+C CALCULATES VOLUMES (FLOTATION AND TOTAL) AND AREAL EXTENT
+        CALL VOLUME(MXX, TIME, NUMNP, NUMEL, X, Y, KX, Q, BDROCK,
+     &             DEPB, SEALEV, RHOI, RHOW, VOL, AREA, AMASS)
+C
+      NTSTEP=NTSTEP+1
+      TTIME(NTSTEP)=TIME
+      VVOL(NTSTEP)=VOL*1.E-15
+      AAREA(NTSTEP)=AREA*1.E-12
+C
+C       FORM STIFFNESS,CAPACITANCE AND LOAD
+      CALL FORMA(MXX,MCOL,X,Y,KX,NTYPE,NUMNP,NUMEL,NCOL,ETA,XI,W,CONST,
+     &     ADOT,FRACT,BDROCK,PSURF,RHOI,FLOWA,SLDGB,
+     &     T,KODE,NUMGBC,IBFLUX,BFLUX,
+     &        MBAND,LM,AADOT,AFRACT,ABDRCK,AFLOWA,ASLDGB,D,B,A)
+C
+C       FORM EFFECTIVE CONDUCTIVITY MATRIX FOR TIME INCREMENT
+          DT2=1.0/DT
+          DO 320 N=1,NUMNP
+            IF (KODE(N).EQ.0) THEN
+              IF (D(N).NE.0.) THEN
+                D(N)=DT2*D(N)
+                A(MBAND+1,N)=A(MBAND+1,N)+D(N)
+              ENDIF
+            ENDIF
+320       CONTINUE
+          LL=0
+          LF=0
+C
+C
+C
+C         LOOP ON NUMBER OF TIME STEPS *******************************
+          IF(IPLOT.NE.0) THEN
+            CALL GRSTRT(500,1)
+            CALL WINDOW(0.,100.,0.,100.)
+          ENDIF
+          IDONE=0
+          DO 450 L=1,NDT
+C
+C           CALCULATE EFFECTIVE LOAD MATRIX
+            DO 360 I=1,NUMNP
+              Q(I)=B(I)
+              IF (KODE(I).EQ.0) Q(I)=B(I)+D(I)*T(I)
+360         CONTINUE
+C
+c remove here, this writes out matrix
+c     rewind 73
+c     write(73,*) numnp,ncol
+c     do i=1,numnp
+c      write(73,*) (a(j,i),j=1,ncol),q(i)
+c     enddo
+c to here ******
+            CALL ASYMSL(1)
+            CALL ASYMSL(2)
+            TIME=TIME+DT
+            WRITE(*,*) 'TIME=',TIME
+            LL=LL+1
+            LF=LF+1
+            HMAX=-1.E30
+            DIFF=0.
+            NDIFF=0
+            DO 5511 JK=1,NUMNP
+              IF(KODE(JK).NE.1) THEN
+                DIFF=DIFF+(Q(JK)-PSURF(JK))**2
+                NDIFF=NDIFF+1
+              ENDIF
+              IF(Q(JK).GT.HMAX) THEN
+                HMAX=Q(JK)
+                NMAX=JK
+              ENDIF
+              IF (Q(JK).LE.UNDEPB(JK)) Q(JK)=UNDEPB(JK)
+C
+C ****        TO DEAL WITH BED BELOW SEA LEVEL AND
+C ****        SURFACE BELOW FLOTATION HEIGHT
+              IF(UNDEPB(JK).LE.0.) THEN
+                FLOT=(1.-RHOW/RHOI)*UNDEPB(JK)
+C               IF(Q(JK).LE.FLOT) Q(JK)=FLOT
+                IF(Q(JK).LE.FLOT) Q(JK)=0.
+                IF(BDROCK(JK).LE.-9999.) Q(JK)=0.
+              ENDIF
+C ****        END FLOTATION PART ****
+5511        CONTINUE
+C
+C THIS IS SPECIAL TO DEAL WITH TERRYS TEMP DEP STUFF, PLEASE REMOVE
+C       DO 5512 JK=1,NUMNP
+C         IF(Q(JK).GT.1250.) THEN
+C           FRACT(JK)=FRACT(JK)+.05
+C           IF(FRACT(JK).GT.1.) FRACT(JK)=1.
+C         ELSE
+C           FRACT(JK)=FRACT(JK)-.05
+C           IF(FRACT(JK).LT.0.) FRACT(JK)=0.
+C         ENDIF
+C 5512  CONTINUE
+C       CALL ELPROP(MXX, NUMEL, NTYPE, KX, ADOT, AADOT, FRACT, AFRACT,
+C      &            BDROCK, ABDRCK, PSURF, PPSURF, FLOWA, AFLOWA,
+C      &            SLDGB, ASLDGB)
+C END TERRYS SPECIAL STUFF
+C
+C OUTPUT TIME STEP INFO TO SCREEN
+            WRITE(*,2301) 'MAX SURF=',HMAX,' AT NODE',NMAX,' DIFF=',
+     &              SQRT(DIFF/REAL(NDIFF))
+2301  FORMAT(A,F10.1,A,I6,A,F10.1)
+C
+C OBTAIN NEW LINEARIZATION CONSTANT FROM LATEST SOLUTION
+            CALL NCONST(MXX, IDEP, X, Y, KX, NTYPE, NUMEL,
+     &             AFRACT, ASLDGB, LM, AFLOWA, BDROCK, DEPB, UNDEPB,
+     &             PG, Q, CNEW, SLOPE, RHOI, WINDIR)
+C
+C DERIVE SLOPE IN CASE NEEDED BY MASS BALANCE PARAMETERIZATION
+            CALL NODESL(MXX, NUMNP, NUMEL, KX, SLOPE, SLOPN)
+            DO 102 I=1,NUMNP
+              IF(IDT(I).GT.0) ADOT(I)=AFUNCT(TIME, IDT(I), AMASS,
+     &                            Q(I), BDROCK(I), SLOPN(1,I),
+     &                            X(I),Y(I),TEMP(I))
+102         CONTINUE
+C
+C LOAD NEW NODE PROPERTIES INTO ELEMENT PROPERTIES
+            CALL ELPROP(MXX, NUMEL, NTYPE, KX, ADOT, AADOT, FRACT,
+     &             AFRACT, BDROCK, ABDRCK, PSURF, PPSURF, FLOWA,
+     &             AFLOWA, SLDGB, ASLDGB)
+C
+C CALCULATE VOLUMES (FLOTATION AND TOTAL) AND AREA
+            CALL VOLUME(MXX, TIME, NUMNP, NUMEL, X, Y, KX, Q, BDROCK,
+     &            DEPB, SEALEV, RHOI, RHOW, VOL, AREA, AMASS)
+C
+      NTSTEP=NTSTEP+1
+      TTIME(NTSTEP)=TIME
+      VVOL(NTSTEP)=VOL*1.E-15
+      AAREA(NTSTEP)=AREA*1.E-12
+            DO 380 I=1,NUMNP
+              T(I)=Q(I)
+380         CONTINUE
+C
+C LOAD NEW LINEARIZATION CONSTANT INTO OLD
+            DO 381 I=1,NUMEL
+C             CONST(I)=CNEW(I)
+              CONST(I) = (CONV*CONST(I) + CNEW(I))/(CONV+1)
+381         CONTINUE
+C
+C           FORM STIFF,CAP,LOAD FOR NEXT PASS
+      CALL FORMA(MXX,MCOL,X,Y,KX,NTYPE,NUMNP,NUMEL,NCOL,ETA,XI,W,CONST,
+     &     ADOT,FRACT,BDROCK,PSURF,RHOI,FLOWA,SLDGB,
+     &     T,KODE,NUMGBC,IBFLUX,BFLUX,
+     &        MBAND,LM,AADOT,AFRACT,ABDRCK,AFLOWA,ASLDGB,D,B,A)
+C
+            DO 3201 N=1,NUMNP
+              IF (KODE(N).EQ.0) THEN
+                IF (D(N).NE.0.0) THEN
+                  D(N)=DT2*D(N)
+                  A(MBAND+1,N)=A(MBAND+1,N)+D(N)
+                ENDIF
+              ENDIF
+3201        CONTINUE
+C
+C PRINT OUT SOLUTION FOR APPROPRIATE TIME STEPS
+            IF(LL.GE.INTER) THEN
+            WRITE(*,*)
+            WRITE(*,*) 'DUMPING SOLUTION . . . . . . . .'
+            WRITE(*,*)
+              DO 731 N=1,NUMNP
+                HTICE(N)=Q(N)
+731           CONTINUE
+              WRITE(SCRTCH,*) 'TIME=',TIME
+              WRITE(34) SCRTCH
+              WRITE(34) (HTICE(I),I=1,NUMNP)
+              WRITE(34) (ADOT(I),I=1,NUMNP)
+              WRITE(34) (DEPB(I),I=1,NUMNP)
+              WRITE(34) (CONST(I),I=1,NUMEL)
+              LL=0
+            ENDIF
+            IF(LF.GE.IFIT(6)) THEN
+              DO N=1,NUMNP
+                HTICE(N)=Q(N)
+              ENDDO
+              LF=0
+              CALL MODIFY(IFIT,NUMNP,KODE,HTICE,DEPB,PSURF,
+     &                    ADOT,FRACT,FLOWA,SLDGB,BDROCK)
+              CALL UNLOAD(NUMNP,BDROCK,UNDEPB,PSURF)
+            ENDIF
+          IF(IPLOT.NE.0) THEN
+            CALL PLOTSOL(NUMNP,X,Y,HTICE,DEPB,KODE,NTSTEP,TTIME,VVOL,
+     &                   AAREA,
+     &                   IPLOT)
+            CALL DRAWOUT(IDONE)
+          ENDIF
+450       CONTINUE
+          IF(IPLOT.NE.0) CALL GRSTOP1
+C
+C     END OF TIME STEP SECTION ***************************************
+C
+C
+C
+      HMAX=-1.E30
+      DIFF=0.
+      NDIFF=0
+      DO 730 N=1,NUMNP
+        IF(KODE(N).NE.1) THEN
+          DIFF=DIFF+(Q(N)-PSURF(N))**2
+          NDIFF=NDIFF+1
+        ENDIF
+        HTICE(N)=Q(N)
+        IF(HTICE(N).GT.HMAX) THEN
+          HMAX=HTICE(N)
+          NMAX=N
+        ENDIF
+        IF (HTICE(N).LE.UNDEPB(N)) HTICE(N)=UNDEPB(N)
+C ****  TO DEAL WITH BED BELOW SEA LEVEL
+C ****  AND SURFACE BELOW FLOTATION HEIGHT
+        IF(UNDEPB(N).LE.0.) THEN
+          FLOT=(1.-RHOW/RHOI)*UNDEPB(N)
+C         IF(HTICE(N).LE.FLOT) HTICE(N)=FLOT
+          IF(HTICE(N).LE.FLOT) HTICE(N)=0.
+          IF(BDROCK(N).LE.-9999.) HTICE(N)=0.
+        ENDIF
+C ****  END FLOTATION PART ****
+730   CONTINUE
+C
+C OUTPUT TIME STEP INFO TO SCREEN
+      WRITE(*,2301) 'MAX SURF=', HMAX, ' AT NODE',NMAX,' DIFF=',
+     &            SQRT(DIFF/REAL(NDIFF))
+C
+C     FORMAT STATEMENTS
+C
+1001  FORMAT(I6,I4,1P2E12.5,0PF10.2,F7.2,F9.2,F10.3,F10.1,F10.5,2F10.5,
+     &       I5,F10.3)
+1002  FORMAT(5I5,1PE17.10)
+1003  FORMAT(I10,4F10.0)
+1007  FORMAT(2I5,E13.6)
+2002  FORMAT(2I2,1PE10.3,2E10.3,/,10X,6E10.3)
+2003  FORMAT('  N  I  J  K  L',/,
+     &10X,'        COND-  SPECIFIC   HEAT      DENSITY     VERT HORI'
+     &,/,
+     &10X,'      UCTIVITY   HEAT   GENERATED             VELOCITY',/,
+     &10X,'       CAL/M/D/YR       CAL/M**3/YR             M/YR',/,
+     &10X,'               CAL/KG/D             KG/M**3')
+2004  FORMAT(5I3,7E14.4)
+2005  FORMAT(' TIME=', E12.5,/,(I6,E14.6,I6,E14.6,I6,E14.6,I6,E14.6,
+     & I6,E14.6,I6,E14.6))
+2006  FORMAT('    I    J              H    TEMPERATURE')
+2007  FORMAT(2I5,2E15.6)
+2009  FORMAT('  M ',14X,'K',14X,'C',14X,'D',14X,'Q',/,(I4,4E15.6))
+2010  FORMAT(' AXISYMMETRIC SOLID BODY')
+2011  FORMAT('TWO DIMENSIONAL PLANE BODY ')
+2020  FORMAT(' CARD NO. ',I4, ' OUT OF ORDER')
+2021  FORMAT(' BAD CARD NO. ',I4)
+3005  FORMAT(2F10.0,G13.6)
+C
+C
+      WRITE(*,8989)
+8989  FORMAT (' END OF RUN')
+C     END OF RUN, ENTER ADJUST TO GO ROUND AGAIN.
+      WRITE(*,*) 'INPUT 1 TO CALL ADJUST -9 TO SKIP AND END'
+      READ(*,*,END=999) IADJ
+      WRITE(99,*) IADJ
+      IF(IADJ.EQ.-9) GOTO 999
+C
+C ENTER INTERACTIVE DATA SET MANIPULATOR
+      CALL ADJUST(HED, NUMNP, NUMEL, X, Y, HTICE, ADOT, FRACT, 
+     &            TEMP, PSURF,
+     &        BDROCK, DEPB, FLOWA, SLDGB, THICK, KX, CONST, NNODE, KODE,
+     &            HFIT, NUMCOL, NUMLEV, NUMGBC, NDT, INTER, DT,
+     &            IBFLUX, BFLUX, MXX, IDT, SLOPN, AMASS, TIME,
+     &            NTSTEP, TTIME, VVOL, AAREA, IFIT,ITOGG, IPLOT)
+C
+      DO 92 I=1,NUMNP
+        Q(I)=HTICE(I)
+92    CONTINUE
+C
+C LOAD NODAL PROPERTIES INTO ELEMENT PROPERTIES
+      CALL ELPROP(MXX, NUMEL, NTYPE, KX, ADOT, AADOT, FRACT, AFRACT,
+     &            BDROCK, ABDRCK, PSURF, PPSURF, FLOWA, AFLOWA, SLDGB,
+     &            ASLDGB)
+C
+      WRITE(*,*) 'INPUT 1 TO CONTINUE WITH NEW SET, 0 TO STOP '
+      READ(*,*,END=999) IADJ
+      WRITE(99,*) IADJ
+      IF(IADJ.EQ.0) GOTO 999
+      ITER=1
+C     GOTO BEGINNING OF MAIN LOOP
+C
+C
+C
+      GOTO 215
+C
+C
+C
+999   CONTINUE
+C
+C VERBOSE WRITER OFF
+C     CALL WRITER(HED, NUMNP, NUMEL, X, Y, HTICE, ADOT, FRACT, PSURF,
+C    &            RHOI, BDROCK, FLOWA, SLDGB, THICK, KX, CONST, NNODE,
+C    &            KODE, HFIT, NUMCOL, NUMLEV, NUMGBC, NDT, INTER, DT,
+C    &            IBFLUX, BFLUX, AADOT, AFRACT, AFLOWA, ABDRCK,
+C    &            ASLDGB)
+C
+      WRITE(18,2000) -99999.,2.,0,HED
+2000  FORMAT(10X,G13.6,2X,G13.6,I13,/,A80)
+      STOP
+      END

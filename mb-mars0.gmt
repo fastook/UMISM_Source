@@ -1,0 +1,35 @@
+#psbasemap -V -U -R-90/0/-1000/20000 \
+psbasemap -V -U `minmax plot.xyz -I1` \
+          -JX5.5/5.5 -B10g10/2000g1000 \
+          -P -X1 -Y3 -K  > test.ps
+#-------------------------------------
+makecpt -T-0.879930E-01/0.649563E-02/0.377954E-02 -Crainbow > topo.cpt
+makecpt -T-0.01/0.01/0.0005 -Cno_green > topo.cpt
+makecpt -T-2/2/0.2 -Cno_green > topo.cpt
+makecpt -T0/0.05/0.0025 -Crainbow > topo.cpt
+#-------------------------------------
+pscontour plot.xyz -A- -V  -I -Ctopo.cpt \
+          -JX -R -K -O >> test.ps
+#pscontour plot.xyz -A- -V  -W2/0/0/0 \
+#         -Ctopo.cpt -JX -R -B -K -O >> test.ps
+#pscontour plot.xyz -A- -V  -W2/255/255/255 \
+#     -L2/0/0/0 -Ctopo.cpt -JX -R -K -O >> test.ps
+#psxy plot.xyz -V  -R -JX -M -Sa0.1 \
+#     -W2/255/0/0 -K -O >> test.ps
+#-------------------------------------
+psscale -E -Ctopo.cpt -D6.1/3/6.5/0.3 \
+        -L -K -O >> test.ps
+#-------------------------------------
+pstext -P -R0/11/0/8.5 -Jx1 -K \
+       -O << END >> test.ps
+0  6.5 20 0 1 1  mass balance
+END
+pstext -P -R0/11/0/8.5 -Jx1 \
+       -O  << END >> test.ps
+0.2  6.2 10 0 1 1  mm/yr
+END
+#-------------------------------------
+cp test.ps MassB.ps
+display MassB.ps &
+convert MassB.ps MassB.gif
+convert MassB.ps MassB.pdf

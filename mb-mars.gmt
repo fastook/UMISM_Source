@@ -1,0 +1,48 @@
+#psbasemap -V -U -R1800/2200/900/1300 \
+psbasemap -V -U `minmax plot.xyz -I1` \
+          -JX5.5/5.5 -B10g10/1000g1000 \
+          -P -X1 -Y3 -K  > test.ps
+#-------------------------------------
+makecpt -T-0.25/5.25/0.25 -Crainbow > topo.cpt
+makecpt -T-5.5/5.5/0.5 -Cno_green > topo.cpt
+#makecpt -T-55/55/5 -Cno_green > topo.cpt
+#makecpt -T0.5/1/0.025 -Crainbow > topo.cpt
+#-------------------------------------
+pscontour plot.xyz -A- -V  -I -Ctopo.cpt \
+          -JX -R -K -O >> test.ps
+#pscontour plot.xyz -A- -V  -W2/0/0/0 \
+#         -Ctopo.cpt -JX -R -B -K -O >> test.ps
+#pscontour plot.xyz -A- -V  -W2/255/255/255 \
+#     -L2/0/0/0 -Ctopo.cpt -JX -R -K -O >> test.ps
+#psxy -V  -R -JX -M \
+#     -W2/0/0/0 -K -O << END >> test.ps
+#-50 -2000
+#-72 20000
+#> -1
+#-50 -2000
+#-94 20000
+#> -2
+#-50 -2000
+#-116 20000
+#> -3
+#-50 -2000
+#-138 20000
+#> -4
+#END
+#-------------------------------------
+psscale -E -Ctopo.cpt -D6.1/3/6.5/0.3 \
+        -L -K -O >> test.ps
+#-------------------------------------
+pstext -P -R0/11/0/8.5 -Jx1 -K \
+       -O << END >> test.ps
+0  6.5 20 0 1 1  Mass Balance
+END
+pstext -P -R0/11/0/8.5 -Jx1 \
+       -O  << END >> test.ps
+0.2  6.2 10 0 1 1  Lapse Rate= $1
+END
+#-------------------------------------
+cp test.ps MassB-$1.ps
+#display MassB-$1.ps &
+convert MassB-$1.ps MassB-$1.gif
+convert MassB-$1.ps MassB-$1.pdf
